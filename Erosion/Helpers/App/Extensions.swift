@@ -11,7 +11,7 @@ import SwiftUI
 extension FileManager {
     func createDirIfNeeded(at url: URL) throws {
         if !self.fileExists(atPath: url.path) {
-            try? self.createDirectory(at: url, withIntermediateDirectories: true)
+            try self.createDirectory(at: url, withIntermediateDirectories: true)
         }
     }
 }
@@ -39,6 +39,11 @@ extension Array: @retroactive RawRepresentable where Element: Codable {
 
 // String+Error
 extension String: @retroactive Error {}
+extension String: @retroactive LocalizedError {
+    nonisolated public var errorDescription: String? {
+        self.loc
+    }
+}
 
 // ButtonRole++
 extension ButtonRole {

@@ -17,11 +17,11 @@ enum FileSortMode: String, CaseIterable, Codable, Hashable {
     
     var label: String {
         switch self {
-        case .system: return "默认"
-        case .name: return "名称"
-        case .date: return "日期"
-        case .type: return "类型"
-        case .size: return "大小"
+        case .system: return L("默认")
+        case .name: return L("名称")
+        case .date: return L("日期")
+        case .type: return L("类型")
+        case .size: return L("大小")
         }
     }
 }
@@ -31,9 +31,11 @@ struct FileBrowserView: View {
     var path: URL = URL(fileURLWithPath: "/")
     var isContainer = false
     var shouldGrant = false
+    var highlightTargetURL: URL? = nil
     
     @State private var dirFiles: [FileItem] = []
     @State private var unfilteredFiles: [FileItem] = []
+    @State private var rawFiles: [FileItem] = []
     @State private var searchText = ""
     @AppStorage("maxInode") var maxInode = 15000000
     @AppStorage("chosenSort") var chosenSort: FileSortMode = .system
@@ -44,41 +46,58 @@ struct FileBrowserView: View {
     @AppStorage("useMonospaced") var useMonospaced = true
     
     @State private var showFileImporter = false
+    @State private var showWiFiShare = false
+    @State private var showFolderAnalysis = false
+    @State private var pendingAnalysisNavURL: URL?
+    @State private var analysisNavigateURL: URL?
     @State private var showFailure = false
     @State private var failMsg = ""
     @State private var isLoading = false
     @State private var hasLoaded = false
+    @State private var didAutoScrollToHighlight = false
     
     var body: some View {
-        List {
-            if isLoading {
-                Section {
-                    VStack(alignment: .leading) {
-                        HStack {
-                            ProgressView()
-                                .offset(y: 0.5)
-                            Text("正在加载文件...")
-                                .fontWeight(.medium)
-                        }
-                        if isContainer {
-                            Text("由于容器路径扫描耗时较长，首次加载可能需要 30 秒以上，请耐心等待。")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+        ScrollViewReader { scrollProxy in
+            List {
+                if isLoading {
+                    Section {
+                        VStack(alignment: .leading) {
+                            HStack {
+                                ProgressView()
+                                    .offset(y: 0.5)
+                                Text("正在加载文件...")
+                                    .fontWeight(.medium)
+                            }
+                            if isContainer {
+                                Text("由于容器路径扫描耗时较长，首次加载可能需要 30 秒以上，请耐心等待。")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
-                }
-            } else if showFailure {
-                CompactAlert(title: "无法加载目录文件！", symbol: "folder.badge.questionmark", text: failMsg)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-            } else {
-                ForEach(dirFiles) { file in
-                    if file.type == .folder {
-                        FolderRow(file: file, shouldGrant: isContainer ? true : false, isContainer: isContainer)
-                    } else {
-                        FileRow(file: file)
+                } else if showFailure {
+                    CompactAlert(title: "无法加载目录文件！", symbol: "folder.badge.questionmark", text: failMsg)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(dirFiles) { file in
+                        Group {
+                            if file.type == .folder {
+                                FolderRow(file: file, shouldGrant: isContainer ? true : false, isContainer: isContainer)
+                            } else {
+                                FileRow(file: file)
+                            }
+                        }
+                        .id(file.id)
+                        .listRowBackground(matchesHighlight(file) ? Color.orange.opacity(0.16) : Color?.none)
                     }
                 }
+            }
+            .onChange(of: dirFiles.map(\.id)) {
+                scrollToHighlightedIfNeeded(using: scrollProxy)
+            }
+            .onAppear {
+                scrollToHighlightedIfNeeded(using: scrollProxy)
             }
         }
         .navigationTitle(path.lastPathComponent)
@@ -123,7 +142,7 @@ struct FileBrowserView: View {
                     if !isContainer {
                         Menu {
                             Button {
-                                Alertinator.shared.prompt(title: "请输入新文件名称（请附带文件扩展名）：", placeholder: "new.txt", completion: { name in
+                                Alertinator.shared.prompt(title: L("请输入新文件名称（请附带文件扩展名）："), placeholder: "new.txt", completion: { name in
                                     let name = name ?? ""
                                     if !name.isEmpty {
                                         do {
@@ -132,7 +151,7 @@ struct FileBrowserView: View {
                                             mgr.refreshFiles.toggle()
                                         } catch {
                                             print("(fm) failed to create file: \(error.localizedDescription)")
-                                            Alertinator.shared.alert(title: "新建文件失败！", body: Errors.checkLogs)
+                                            Alertinator.shared.alert(title: L("新建文件失败！"), body: Errors.checkLogs)
                                         }
                                     }
                                 })
@@ -141,7 +160,7 @@ struct FileBrowserView: View {
                             }
                             
                             Button {
-                                Alertinator.shared.prompt(title: "请输入新建 Plist 属性列表名称：", placeholder: "配置名称", completion: { name in
+                                Alertinator.shared.prompt(title: L("请输入新建 Plist 属性列表名称："), placeholder: L("配置名称"), completion: { name in
                                     let name = name ?? ""
                                     if !name.isEmpty {
                                         do {
@@ -151,7 +170,7 @@ struct FileBrowserView: View {
                                             mgr.refreshFiles.toggle()
                                         } catch {
                                             print("(fm) failed to create plist: \(error.localizedDescription)")
-                                            Alertinator.shared.alert(title: "新建 Plist 失败！", body: Errors.checkLogs)
+                                            Alertinator.shared.alert(title: L("新建 Plist 失败！"), body: Errors.checkLogs)
                                         }
                                     }
                                 })
@@ -160,7 +179,7 @@ struct FileBrowserView: View {
                             }
                             
                             Button {
-                                Alertinator.shared.prompt(title: "请输入新建文件夹名称：", placeholder: "新建文件夹", completion: { name in
+                                Alertinator.shared.prompt(title: L("请输入新建文件夹名称："), placeholder: L("新建文件夹"), completion: { name in
                                     let name = name ?? ""
                                     if !name.isEmpty {
                                         do {
@@ -168,7 +187,7 @@ struct FileBrowserView: View {
                                             mgr.refreshFiles.toggle()
                                         } catch {
                                             print("(fm) failed to create folder: \(error.localizedDescription)")
-                                            Alertinator.shared.alert(title: "新建文件夹失败！", body: Errors.checkLogs)
+                                            Alertinator.shared.alert(title: L("新建文件夹失败！"), body: Errors.checkLogs)
                                         }
                                     }
                                 })
@@ -177,7 +196,7 @@ struct FileBrowserView: View {
                             }
                             
                             Button {
-                                Alertinator.shared.prompt(title: "请输入符号链接指向的目标路径：", placeholder: "/path/to/dir", completion: { symPath in
+                                Alertinator.shared.prompt(title: L("请输入符号链接指向的目标路径："), placeholder: "/path/to/dir", completion: { symPath in
                                     let symPath = symPath ?? ""
                                     if !symPath.isEmpty {
                                         do {
@@ -185,7 +204,7 @@ struct FileBrowserView: View {
                                             mgr.refreshFiles.toggle()
                                         } catch {
                                             print("(fm) failed to create symlink: \(error.localizedDescription)")
-                                            Alertinator.shared.alert(title: "创建符号链接失败！", body: "\(error.localizedDescription)")
+                                            Alertinator.shared.alert(title: L("创建符号链接失败！"), body: "\(error.localizedDescription)")
                                         }
                                     }
                                 })
@@ -200,6 +219,24 @@ struct FileBrowserView: View {
                             showFileImporter.toggle()
                         } label: {
                             Label("导入文件", systemImage: "arrow.down.doc")
+                        }
+
+                        Button {
+                            showFolderAnalysis = true
+                        } label: {
+                            Label(
+                                LocalizationManager.isEnglish ? "Deep Search & Large Files" : "深度搜索与大文件",
+                                systemImage: "magnifyingglass.circle"
+                            )
+                        }
+
+                        Button {
+                            showWiFiShare = true
+                        } label: {
+                            Label(
+                                LocalizationManager.isEnglish ? "Wi-Fi File Sharing" : "Wi-Fi 无线传输",
+                                systemImage: "wifi"
+                            )
                         }
                         Divider()
                     }
@@ -259,26 +296,57 @@ struct FileBrowserView: View {
         .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.item]) { result in
             handleImport(result)
         }
+        .sheet(isPresented: $showWiFiShare) {
+            WiFiShareSheet(rootURL: path)
+        }
+        .sheet(isPresented: $showFolderAnalysis, onDismiss: {
+            if let target = pendingAnalysisNavURL {
+                pendingAnalysisNavURL = nil
+                analysisNavigateURL = target
+            }
+        }) {
+            FolderAnalysisSheet(rootURL: path) { targetURL in
+                let targetCanon = FMNavigationStore.canonicalPath(targetURL.path)
+                let currentCanon = FMNavigationStore.canonicalPath(path.path)
+                if targetCanon != currentCanon {
+                    pendingAnalysisNavURL = targetURL
+                }
+                showFolderAnalysis = false
+            }
+        }
+        .navigationDestination(item: $analysisNavigateURL) { targetURL in
+            FileBrowserView(path: targetURL, shouldGrant: true)
+        }
         .refreshable {
             mgr.refreshFiles.toggle()
         }
         .onAppear {
             if !mgr.storedFiles.isEmpty && mgr.storedURL == path {
+                rawFiles = mgr.storedFiles
                 let sorted = sortFiles(files: mgr.storedFiles)
                 unfilteredFiles = sorted
                 dirFiles = filterFiles(sorted, query: searchText)
+                if !isContainer {
+                    FMNavigationStore.shared.record(url: path)
+                }
             } else if isContainer && hasLoaded {
                 // do nothing as it's already being stored in the variable
             } else {
                 if shouldGrant {
-                    let res = wq.grantAccess(path: path.path)
+                    let res = wq.grantAccess(path: path.path, requireWrite: false)
                     if res.0 {
+                        if !isContainer {
+                            FMNavigationStore.shared.record(url: path)
+                        }
                         loadFilesFromPath()
                     } else {
                         showFailure = true
-                        failMsg = "无权访问该目录。"
+                        failMsg = L("无权访问该目录。")
                     }
                 } else {
+                    if !isContainer {
+                        FMNavigationStore.shared.record(url: path)
+                    }
                     loadFilesFromPath()
                 }
             }
@@ -287,16 +355,43 @@ struct FileBrowserView: View {
             dirFiles = filterFiles(unfilteredFiles, query: newSearch)
         }
         .onChange(of: chosenSort) {
-            loadFilesFromPath()
+            let source = rawFiles.isEmpty ? unfilteredFiles : rawFiles
+            let sorted = sortFiles(files: source)
+            unfilteredFiles = sorted
+            dirFiles = filterFiles(sorted, query: searchText)
         }
         .onChange(of: filesAscend) {
-            loadFilesFromPath()
+            let source = rawFiles.isEmpty ? unfilteredFiles : rawFiles
+            let sorted = sortFiles(files: source)
+            unfilteredFiles = sorted
+            dirFiles = filterFiles(sorted, query: searchText)
         }
         .onChange(of: mgr.refreshFiles) {
             loadFilesFromPath()
         }
     }
     
+    private func matchesHighlight(_ item: FileItem) -> Bool {
+        guard let highlightTargetURL else { return false }
+        let targetCanon = FMNavigationStore.canonicalPath(highlightTargetURL.standardizedFileURL.path)
+        let itemCanon = FMNavigationStore.canonicalPath(item.fileURL.standardizedFileURL.path)
+        return itemCanon == targetCanon
+    }
+
+    private func scrollToHighlightedIfNeeded(using proxy: ScrollViewProxy) {
+        guard !didAutoScrollToHighlight,
+              highlightTargetURL != nil,
+              let matched = dirFiles.first(where: { matchesHighlight($0) }) else {
+            return
+        }
+        didAutoScrollToHighlight = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                proxy.scrollTo(matched.id, anchor: .center)
+            }
+        }
+    }
+
     private func filterFiles(_ files: [FileItem], query: String) -> [FileItem] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return files }
@@ -332,6 +427,7 @@ struct FileBrowserView: View {
                     }
                 }
                 DispatchQueue.main.async {
+                    rawFiles = unsortedFiles
                     let sorted = sortFiles(files: unsortedFiles)
                     unfilteredFiles = sorted
                     dirFiles = filterFiles(sorted, query: searchText)
@@ -346,7 +442,7 @@ struct FileBrowserView: View {
                 print("(fm) failed to load files from \(currentPath): \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     showFailure = true
-                    failMsg = "你可能没有查看此目录的权限，请前往主页查看运行日志了解详情。"
+                    failMsg = L("你可能没有查看此目录的权限，请前往主页查看运行日志了解详情。")
                     isLoading = false
                 }
             }
@@ -390,17 +486,26 @@ struct FileBrowserView: View {
                 let data = try Data(contentsOf: fileURL)
                 
                 let newURL = path.appendingPathComponent(fileURL.lastPathComponent)
-                try? fm.removeItem(at: newURL)
-                
-                try data.write(to: newURL)
+                if newURL.lastPathComponent.lowercased() == "com.apple.mobilegestalt.plist" {
+                    Alertinator.shared.alert(title: L("已拦截高危系统文件覆盖！"), body: L("禁止在文件浏览器中直接导入覆盖 com.apple.MobileGestalt.plist，请使用 MobileGestalt 专用模块。"))
+                    return
+                }
+                if fm.fileExists(atPath: newURL.path) {
+                    let atomicRes = writeFileAtomically(data, to: newURL, allowEmpty: true)
+                    if !atomicRes.0 {
+                        throw atomicRes.1
+                    }
+                } else {
+                    try data.write(to: newURL, options: .atomic)
+                }
                 mgr.refreshFiles.toggle()
             } catch {
                 print("(fm) failed to import file: \(error.localizedDescription)")
-                Alertinator.shared.alert(title: "导入文件失败！", body: "\(error.localizedDescription)")
+                Alertinator.shared.alert(title: L("导入文件失败！"), body: "\(error.localizedDescription)")
             }
         case .failure(let error):
             print("(fm) failed to import file: \(error.localizedDescription)")
-            Alertinator.shared.alert(title: "导入文件失败！", body: "\(error.localizedDescription)")
+            Alertinator.shared.alert(title: L("导入文件失败！"), body: "\(error.localizedDescription)")
         }
     }
 }

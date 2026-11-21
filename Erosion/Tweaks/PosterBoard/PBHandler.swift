@@ -27,6 +27,28 @@ enum PBPath: String, Codable, CaseIterable {
         case .photos: return "Library/Application Support/PRBPosterExtensionDataStore/61/Extensions/com.apple.PhotosUIPrivate.PhotosPosterProvider/descriptors"
         }
     }
+    
+    var extensionIdentifier: String {
+        switch self {
+        case .wpKit: return "com.apple.WallpaperKit.CollectionsPoster"
+        case .mercury: return "com.apple.MercuryPoster"
+        case .photos: return "com.apple.PhotosUIPrivate.PhotosPosterProvider"
+        }
+    }
+    
+    func resolvedPath(in containerPath: String) -> String {
+        let storeRoot = URL(fileURLWithPath: containerPath).appendingPathComponent("Library/Application Support/PRBPosterExtensionDataStore")
+        let defaultVersion = "61"
+        var chosenVersion = defaultVersion
+        if !fm.fileExists(atPath: storeRoot.appendingPathComponent(defaultVersion).path),
+           let children = try? fm.contentsOfDirectory(atPath: storeRoot.path) {
+            let numericVersions = children.compactMap { Int($0) }.sorted()
+            if let highest = numericVersions.last {
+                chosenVersion = String(highest)
+            }
+        }
+        return "Library/Application Support/PRBPosterExtensionDataStore/\(chosenVersion)/Extensions/\(extensionIdentifier)/descriptors"
+    }
 }
 
 final class PBHandler {
@@ -36,12 +58,12 @@ final class PBHandler {
         do {
             // Zip Slip path-traversal audit before extraction (SEC-M4-05)
             guard let archive = try? Archive(url: url, accessMode: .read) else {
-                throw "无法读取 .tendies 压缩包！"
+                throw L("无法读取 .tendies 压缩包！")
             }
             for entry in archive {
                 let entryPath = entry.path
                 if entryPath.hasPrefix("/") || entryPath.split(separator: "/").contains("..") {
-                    throw "检测到压缩包包含非法路径穿越条目 (\(entryPath))，已拒绝导入！"
+                    throw L("检测到压缩包包含非法路径穿越条目 (\(entryPath))，已拒绝导入！")
                 }
             }
             try fm.unzipItem(at: url, to: rawURL)
@@ -85,7 +107,7 @@ final class PBHandler {
                     let options: [PBPath] = [.wpKit, .mercury, .photos]
                     
                     if let matched = options
-                        .map({ (path: $0, url: dirURL.appendingPathComponent($0.path)) })
+                        .map({ (path: $0, url: dirURL.appendingPathComponent($0.resolvedPath(in: dirURL.path))) })
                         .first(where: { fm.fileExists(atPath: $0.url.path) }) {
                         pbPath = matched.path
                         if let folderURLs = try? fm.contentsOfDirectory(at: matched.url, includingPropertiesForKeys: nil, options: .skipsHiddenFiles) {

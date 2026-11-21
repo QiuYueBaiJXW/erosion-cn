@@ -57,6 +57,9 @@ final class PlistManager: ObservableObject {
     func writePlistItems(newItem: PlistItem? = nil, delItem: PlistItem? = nil) -> Bool {
         if var newItem {
             newItem.isModified = true
+            if newItem.type != .data {
+                newItem.rawVal = nil
+            }
             let res = replacePlistItem(items: &plistArray, newItem: newItem)
             if !res {
                 print("(fm) failed to write plist: couldn't find \(newItem.key) in dictionary.")
@@ -110,7 +113,12 @@ final class PlistManager: ObservableObject {
     func replacePlistItem(items: inout [PlistItem], newItem: PlistItem) -> Bool {
         for item in items.indices {
             if items[item].id == newItem.id {
-                items[item] = newItem
+                var updated = newItem
+                updated.isModified = true
+                if updated.type != .data {
+                    updated.rawVal = nil
+                }
+                items[item] = updated
                 return true
             }
             
@@ -261,14 +269,14 @@ enum PlistItemType: String, CaseIterable {
     
     var label: String {
         switch self {
-        case .string: return "字符串 (String)"
-        case .int: return "整数 (Integer)"
-        case .double: return "浮点数 (Double)"
-        case .bool: return "布尔值 (Boolean)"
-        case .data: return "二进制数据 (Data)"
-        case .dict: return "字典 (Dictionary)"
-        case .array: return "数组 (Array)"
-        default: return "未知"
+        case .string: return L("字符串 (String)")
+        case .int: return L("整数 (Integer)")
+        case .double: return L("浮点数 (Double)")
+        case .bool: return L("布尔值 (Boolean)")
+        case .data: return L("二进制数据 (Data)")
+        case .dict: return L("字典 (Dictionary)")
+        case .array: return L("数组 (Array)")
+        default: return L("未知")
         }
     }
 }

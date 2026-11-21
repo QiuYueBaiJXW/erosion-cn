@@ -18,6 +18,25 @@ struct OperationsView: View {
     @State private var imprtName = ""
     @State private var imprtData = Data()
     
+    private var normalizedDirectory: String {
+        var dir = directory.trimmingCharacters(in: .whitespacesAndNewlines)
+        while dir.count > 1 && dir.hasSuffix("/") {
+            dir.removeLast()
+        }
+        return dir
+    }
+    
+    private var normalizedFileName: String {
+        var name = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        while name.hasPrefix("/") {
+            name.removeFirst()
+        }
+        while name.hasSuffix("/") {
+            name.removeLast()
+        }
+        return name
+    }
+    
     var body: some View {
         List {
             Section {
@@ -27,14 +46,32 @@ struct OperationsView: View {
                     .disabled(isAcc)
                 HStack {
                     Button("获取读写权限") {
-                        let res = wq.grantAccess(path: "\(directory)/\(fileName)")
-                        if !res.0 {
-                            Alertinator.shared.alert(title: "获取目标文件权限失败！", body: "\(res.1): \(res.2)")
-                        } else {
-                            isAcc = true
+                        let cleanDir = normalizedDirectory
+                        let cleanFile = normalizedFileName
+                        directory = cleanDir
+                        fileName = cleanFile
+                        guard !cleanDir.isEmpty else {
+                            Alertinator.shared.alert(title: L("目录路径为空！"), body: L("请先输入有效的目标目录路径。"))
+                            return
                         }
+                        let dirRes = wq.grantAccess(path: cleanDir)
+                        if !dirRes.0 {
+                            Alertinator.shared.alert(title: L("获取目标目录权限失败！"), body: "\(dirRes.1): \(dirRes.2)")
+                            return
+                        }
+                        if !cleanFile.isEmpty {
+                            let fullPath = "\(cleanDir)/\(cleanFile)"
+                            if fm.fileExists(atPath: fullPath) {
+                                let fileRes = wq.grantAccess(path: fullPath)
+                                if !fileRes.0 {
+                                    Alertinator.shared.alert(title: L("获取目标文件权限失败！"), body: "\(fileRes.1): \(fileRes.2)")
+                                    return
+                                }
+                            }
+                        }
+                        isAcc = true
                     }
-                    .disabled(isAcc)
+                    .disabled(isAcc || normalizedDirectory.isEmpty)
                     if isAcc {
                         Spacer()
                         HStack {
@@ -52,20 +89,24 @@ struct OperationsView: View {
                     }
                     
                     Button("导出原文件") {
-                        let fileDir = "\(directory)/\(fileName)"
-                        presentShareSheet(with: URL(fileURLWithPath: fileDir))
+                        let fileDir = "\(normalizedDirectory)/\(normalizedFileName)"
+                        if let tempURL = makeTemp(URL(fileURLWithPath: fileDir)) {
+                            presentShareSheet(with: tempURL)
+                        } else {
+                            Alertinator.shared.alert(title: L("导出原文件失败！"), body: L("无法读取或复制目标文件，请确认目标文件名存在且可读。"))
+                        }
                     }
+                    .disabled(normalizedFileName.isEmpty)
                 }
             } header: {
-                HeaderLabel("目标文件", symbol: "dot.scope")
+                HeaderLabel(L("目标文件"), symbol: "dot.scope")
             }
             
             Section {
                 HStack {
-                    Button("导入替换文件") {
+                    Button(imprtData.isEmpty ? L("导入替换文件") : L("重新选择替换文件")) {
                         showImporter = true
                     }
-                    .disabled(!imprtData.isEmpty)
                     if !imprtName.isEmpty {
                         Spacer()
                         Text(imprtName)
@@ -75,9 +116,9 @@ struct OperationsView: View {
                 }
                 
                 Button("覆盖目标文件") {
-                    let targetURL = URL(fileURLWithPath: "\(directory)/\(fileName)").standardizedFileURL
+                    let targetURL = URL(fileURLWithPath: normalizedDirectory).appendingPathComponent(normalizedFileName).standardizedFileURL
                     if let blockReason = Self.blockedSystemPathReason(for: targetURL) {
-                        Alertinator.shared.alert(title: "已拦截高危系统路径覆盖！", body: blockReason)
+                        Alertinator.shared.alert(title: L("已拦截高危系统路径覆盖！"), body: blockReason)
                         return
                     }
                     do {
@@ -94,15 +135,15 @@ struct OperationsView: View {
                         Haptic.shared.play(.soft)
                     } catch {
                         print("(ov) failed to overwrite: \(error.localizedDescription)")
-                        Alertinator.shared.alert(title: "覆盖文件失败！", body: "\(error.localizedDescription)")
+                        Alertinator.shared.alert(title: L("覆盖文件失败！"), body: "\(error.localizedDescription)")
                     }
                 }
-                .disabled(imprtData.isEmpty)
+                .disabled(!isAcc || imprtData.isEmpty || normalizedFileName.isEmpty)
                 
                 Button("写入到目标目录") {
-                    let targetURL = URL(fileURLWithPath: "\(directory)").appendingPathComponent(imprtName).standardizedFileURL
+                    let targetURL = URL(fileURLWithPath: normalizedDirectory).appendingPathComponent(imprtName).standardizedFileURL
                     if let blockReason = Self.blockedSystemPathReason(for: targetURL) {
-                        Alertinator.shared.alert(title: "已拦截高危系统路径写入！", body: blockReason)
+                        Alertinator.shared.alert(title: L("已拦截高危系统路径写入！"), body: blockReason)
                         return
                     }
                     do {
@@ -119,21 +160,21 @@ struct OperationsView: View {
                         Haptic.shared.play(.soft)
                     } catch {
                         print("(ov) failed to move: \(error.localizedDescription)")
-                        Alertinator.shared.alert(title: "写入文件失败！", body: "\(error.localizedDescription)")
+                        Alertinator.shared.alert(title: L("写入文件失败！"), body: "\(error.localizedDescription)")
                     }
                 }
-                .disabled(imprtData.isEmpty)
+                .disabled(!isAcc || imprtData.isEmpty)
                 
                 Button("删除目标文件", role: .destructive) {
-                    let targetURL = URL(fileURLWithPath: "\(directory)/\(fileName)").standardizedFileURL
+                    let targetURL = URL(fileURLWithPath: normalizedDirectory).appendingPathComponent(normalizedFileName).standardizedFileURL
                     if let blockReason = Self.blockedSystemPathReason(for: targetURL) {
-                        Alertinator.shared.alert(title: "已拦截高危系统文件删除！", body: blockReason)
+                        Alertinator.shared.alert(title: L("已拦截高危系统文件删除！"), body: blockReason)
                         return
                     }
                     Alertinator.shared.alert(
-                        title: "确认删除目标文件？",
-                        body: "删除前将自动在应用文档目录保存时间戳备份：\n\(targetURL.path)",
-                        actionLabel: "确认删除",
+                        title: L("确认删除目标文件？"),
+                        body: L("删除前将自动在应用文档目录保存时间戳备份：\n\(targetURL.path)"),
+                        actionLabel: L("确认删除"),
                         action: {
                             do {
                                 Self.backupBeforeMutation(targetURL)
@@ -142,14 +183,14 @@ struct OperationsView: View {
                                 Haptic.shared.play(.heavy)
                             } catch {
                                 print("(ov) failed to delete: \(error.localizedDescription)")
-                                Alertinator.shared.alert(title: "删除文件失败！", body: "\(error.localizedDescription)")
+                                Alertinator.shared.alert(title: L("删除文件失败！"), body: "\(error.localizedDescription)")
                             }
                         }
                     )
                 }
-                .disabled(!isAcc)
+                .disabled(!isAcc || normalizedFileName.isEmpty)
             } header: {
-                HeaderLabel("文件操作", symbol: "wrench.and.screwdriver")
+                HeaderLabel(L("文件操作"), symbol: "wrench.and.screwdriver")
             }
         }
         .navigationTitle("任意文件替换")
@@ -173,11 +214,11 @@ struct OperationsView: View {
                 imprtName = recURL.lastPathComponent
             } catch {
                 print("(ov) failed to import file: \(error.localizedDescription)")
-                Alertinator.shared.alert(title: "导入文件失败！", body: "该文件可能无效、已损坏或无法访问，请更换其他替换文件重试。")
+                Alertinator.shared.alert(title: L("导入文件失败！"), body: L("该文件可能无效、已损坏或无法访问，请更换其他替换文件重试。"))
             }
         case .failure(let error):
             print("(ov) failed to import file: \(error.localizedDescription)")
-            Alertinator.shared.alert(title: "导入文件失败！", body: "该文件可能无效、已损坏或无法访问，请更换其他替换文件重试。")
+            Alertinator.shared.alert(title: L("导入文件失败！"), body: L("该文件可能无效、已损坏或无法访问，请更换其他替换文件重试。"))
         }
     }
 
@@ -191,14 +232,14 @@ struct OperationsView: View {
             "truststore.sqlite3"
         ]
         if exactNames.contains(url.lastPathComponent.lowercased()) {
-            return "文件 \(url.lastPathComponent) 属于核心系统安全/引导配置，严禁在“任意文件替换”中裸写或删除（请使用专用模块或安全菜单操作）。"
+            return L("文件 \(url.lastPathComponent) 属于核心系统安全/引导配置，严禁在“任意文件替换”中裸写或删除（请使用专用模块或安全菜单操作）。")
         }
         let forbiddenPrefixes = [
             "/system", "/private/preboot", "/usr", "/bin", "/sbin", "/dev",
             "/var/keychains", "/private/var/keychains", "/var/db", "/private/var/db"
         ]
         for pre in forbiddenPrefixes where lower == pre || lower.hasPrefix(pre + "/") {
-            return "路径 \(p) 位于系统核心保护区，防白苹果安全护栏已禁止直接覆写或删除。"
+            return L("路径 \(p) 位于系统核心保护区，防白苹果安全护栏已禁止直接覆写或删除。")
         }
         return nil
     }
