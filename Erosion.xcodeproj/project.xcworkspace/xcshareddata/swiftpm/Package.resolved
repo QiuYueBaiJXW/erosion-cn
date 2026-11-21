@@ -2,7 +2,7 @@
   "pins": [
     {
       "identity": "zipfoundation",
-      "kind": "remote",
+      "kind": "remoteSourceControl",
       "location": "https://github.com/weichsel/ZIPFoundation",
       "state": {
         "branch": null,
