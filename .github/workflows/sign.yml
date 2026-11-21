@@ -12,6 +12,9 @@
 #      base64 后存为 GitHub Secret IOS_PROV_PROFILE_EROSION；
 #   3. 分发证书 .p12（与有益阅读同一张即可）base64 后存为 IOS_DIST_P12，
 #      导出密码存为 IOS_DIST_P12_PASSWORD。
+# 注意：Archive 必须显式传 DEVELOPMENT_TEAM 和 PROVISIONING_PROFILE_SPECIFIER。
+#   否则 xcodebuild 不知道用哪张描述文件，会报 ZIPFoundation 缺 development team、
+#   Erosion 缺 App Groups 能力（2026-11-21 run 44899326314，exit 65）。
 # 导出方式：ad-hoc（不是 app-store-connect），导出的 IPA 可直接装到 Profile 里登记过的设备上，
 #   有效期 1 年；不要用 SideInstaller 再重签，直接用 Xcode / Apple Configurator 装机。
 name: Build Signed IPA (Ad Hoc)
@@ -65,7 +68,9 @@ jobs:
             -archivePath build/Erosion.xcarchive \
             archive \
             CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution"
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            DEVELOPMENT_TEAM=3Q639W8KX5 \
+            PROVISIONING_PROFILE_SPECIFIER="erosion adhoc"
 
       - name: Export signed IPA (Ad Hoc)
         run: |
