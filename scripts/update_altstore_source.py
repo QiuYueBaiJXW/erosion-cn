@@ -77,7 +77,7 @@ def main() -> None:
     releases = json.loads(http_get_bytes(api_url).decode("utf-8"))
 
     versions_out: list[dict] = []
-    bundle_id = "com.qiuyuebai.Erosion"
+    bundle_id = "com.qiuyuebai.erosion"
 
     for rel in releases:
         if rel.get("draft") or rel.get("prerelease"):

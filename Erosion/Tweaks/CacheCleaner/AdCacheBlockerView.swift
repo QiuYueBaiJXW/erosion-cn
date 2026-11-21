@@ -995,7 +995,7 @@ private struct AdWhitelistManagerSheet: View {
         guard !isLoadingContainers else { return }
         isLoadingContainers = true
         let seed = initialContainers
-        let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.Erosion"
+        let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.erosion"
 
         DispatchQueue.global(qos: .userInitiated).async {
             let appRaw = fsHandlers.getDirPaths(FSURL.appContainers.path)
@@ -1071,7 +1071,7 @@ struct AdCacheBlockerView: View {
     nonisolated private static let sentinelFileName = ".erosion_adlock"
 
     nonisolated fileprivate static let protectedBundleIDs: Set<String> = [
-        "com.qiuyuebai.Erosion",
+        "com.qiuyuebai.erosion",
         "com.apple.PosterBoard",
         "com.apple.springboard",
         "com.apple.Preferences",
@@ -2064,7 +2064,7 @@ struct AdCacheBlockerView: View {
 
             var deniedContainers: Set<String> = []
             var collected: [AppAdCacheEntry] = []
-            let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.Erosion"
+            let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.erosion"
             var completed = 0
             var lastUIUpdate = CFAbsoluteTimeGetCurrent()
 

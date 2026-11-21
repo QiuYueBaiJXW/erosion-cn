@@ -653,7 +653,7 @@ struct AppDataBackupView: View {
     }
 
     private static let protectedSystemBundleIDs: Set<String> = [
-        "com.qiuyuebai.Erosion",
+        "com.qiuyuebai.erosion",
         "com.apple.springboard",
         "com.apple.PosterBoard",
         "com.apple.Preferences"

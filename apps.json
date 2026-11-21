@@ -7,12 +7,12 @@
   "website": "https://github.com/Kianuni/Erosion-CN",
   "tintColor": "#CF7D46",
   "featuredApps": [
-    "com.qiuyuebai.Erosion"
+    "com.qiuyuebai.erosion"
   ],
   "apps": [
     {
       "name": "Erosion-CN",
-      "bundleIdentifier": "com.qiuyuebai.Erosion",
+      "bundleIdentifier": "com.qiuyuebai.erosion",
       "developerName": "Kianuni",
       "subtitle": "iOS / iPadOS 系统配置与 MobileGestalt 研究工具箱（中英双语）",
       "localizedDescription": "Erosion-CN 是面向 iOS / iPadOS 27.0–27.2.1 & 27.3 beta 1（及 26.x 部分功能）的中英双语系统配置与 MobileGestalt 研究工具箱（防白苹果安全加固版）。\n\n• 原位覆盖写入（pwrite + F_FULLFSYNC）与写后全量读回校验，杜绝重启反弹与 0 字节白苹果\n• 无损 CoreFoundation 类型直通，根治相机取景黑屏\n• 运行时动态解析 libMobileGestalt.dylib 槽位 + 双金库 SHA-256 备份一键恢复原厂\n• 支持国行 Apple 智能解锁、海外 eSIM 与 FaceTime 音频开启、应用存档备份、缓存清理与电池/崩溃诊断\n\n⚠️ 签名要求：安装时请务必保留 App Group 权限（SideStore / AltStore / Feather 默认支持）。\n\nBilingual (English + Simplified Chinese) bootloop-hardened MobileGestalt & cross-container research toolkit for iOS/iPadOS 27.x. Requires at least one App Group entitlement when signing.",

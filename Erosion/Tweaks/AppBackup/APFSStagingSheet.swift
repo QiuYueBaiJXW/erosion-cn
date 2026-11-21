@@ -43,7 +43,7 @@ struct APFSStagingSheet: View {
     }
 
     private var stageableContainers: [AppSaveContainerItem] {
-        let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.Erosion"
+        let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.erosion"
         return containers.filter {
             $0.bundleID != selfBID && !APFSStagingEngine.protectedBundleIDs.contains($0.bundleID)
         }
@@ -757,7 +757,7 @@ private struct TargetContainerPickerSheet: View {
     @State private var isRefreshing = false
 
     private var filteredTargets: [AppSaveContainerItem] {
-        let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.Erosion"
+        let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.erosion"
         let eligible = containers.filter { item in
             guard item.bundleID != selfBID,
                   !APFSStagingEngine.protectedBundleIDs.contains(item.bundleID) else {
@@ -876,7 +876,7 @@ private struct TargetContainerPickerSheet: View {
         DispatchQueue.global(qos: .userInitiated).async {
             CSStoreEngine.shared.invalidate()
             let rawPaths = fsHandlers.getDirPaths(FSURL.appContainers.path, forceRefresh: true)
-            let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.Erosion"
+            let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.erosion"
             var discovered: [AppSaveContainerItem] = []
 
             for rawPath in rawPaths {

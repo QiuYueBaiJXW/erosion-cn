@@ -61,7 +61,7 @@ struct CacheCleanerView: View {
     nonisolated private static let autoSelectThresholdBytes: Int64 = 1024 * 1024
 
     nonisolated private static let protectedBundleIDs: Set<String> = [
-        "com.qiuyuebai.Erosion",
+        "com.qiuyuebai.erosion",
         "com.apple.PosterBoard",
         "com.apple.springboard",
         "com.apple.Preferences",
@@ -425,7 +425,7 @@ struct CacheCleanerView: View {
 
             var deniedContainers: Set<String> = []
             var result: [ContainerCacheEntry] = []
-            let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.Erosion"
+            let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.erosion"
             var completedCount = 0
             var lastUIUpdate = CFAbsoluteTimeGetCurrent()
 

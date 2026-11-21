@@ -230,7 +230,7 @@ nonisolated enum APFSStagingEngine {
     ]
 
     static let protectedBundleIDs: Set<String> = [
-        "com.qiuyuebai.Erosion",
+        "com.qiuyuebai.erosion",
         "com.apple.springboard",
         "com.apple.PosterBoard",
         "com.apple.Preferences",
@@ -779,7 +779,7 @@ nonisolated enum APFSStagingEngine {
         sourceContainerURL: URL,
         vaultRootURL: URL
     ) async throws -> APFSStageOutcome {
-        let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.Erosion"
+        let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.erosion"
         if sourceBundleID == selfBID || protectedBundleIDs.contains(sourceBundleID) {
             throw APFSStagingError.protectedContainer(sourceBundleID)
         }
@@ -913,7 +913,7 @@ nonisolated enum APFSStagingEngine {
         targetContainerURL: URL,
         targetBundleID: String
     ) async throws -> APFSRestoreOutcome {
-        let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.Erosion"
+        let selfBID = Bundle.main.bundleIdentifier ?? "com.qiuyuebai.erosion"
         if targetBundleID == selfBID || protectedBundleIDs.contains(targetBundleID) {
             throw APFSStagingError.protectedContainer(targetBundleID)
         }

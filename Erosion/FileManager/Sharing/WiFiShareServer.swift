@@ -208,7 +208,7 @@ private nonisolated final class WiFiShareEngine: @unchecked Sendable {
     let expectedBasicToken: String
     let isEnglish: Bool
     let callbacks: WiFiShareCallbacks
-    let queue = DispatchQueue(label: "com.qiuyuebai.Erosion.wifishare", qos: .userInitiated)
+    let queue = DispatchQueue(label: "com.qiuyuebai.erosion.wifishare", qos: .userInitiated)
 
     private let stateLock = NSLock()
     private let uploadLock = NSLock()
