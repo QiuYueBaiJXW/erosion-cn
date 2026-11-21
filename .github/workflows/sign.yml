@@ -3,19 +3,17 @@
 # 原因：macOS 分钟有限，且 erosion 不能上 TestFlight / App Store，签名只为侧载自用。
 # 签名：Apple Distribution 证书（IOS_DIST_P12，与有益阅读同一张分发证书）+
 #   Ad Hoc Provisioning Profile（IOS_PROV_PROFILE_EROSION，App ID com.qiuyuebai.erosion，
-#   含 App Group group.com.qiuyuebai.erosion.WQ，Profile 名必须叫 erosion adhoc）。
-# 前置（缺一不可，见仓库 README / 用户需在 developer.apple.com 和 GitHub Secrets 里补）：
-#   1. developer.apple.com 里 App ID com.qiuyuebai.erosion 已开 App Groups，
-#      App Group group.com.qiuyuebai.erosion.WQ 已建并绑到该 App ID；
-#   2. 新建 Ad Hoc Profile（App ID 选 com.qiuyuebai.erosion，证书选 Apple Distribution，
-#      设备勾上要装的那台 iPhone，名叫 erosion adhoc），下载 .mobileprovision，
-#      base64 后存为 GitHub Secret IOS_PROV_PROFILE_EROSION；
-#   3. 分发证书 .p12（与有益阅读同一张即可）base64 后存为 IOS_DIST_P12，
-#      导出密码存为 IOS_DIST_P12_PASSWORD。
-# 注意：Archive 用 Automatic 签名 + DEVELOPMENT_TEAM，不传 PROVISIONING_PROFILE_SPECIFIER。
-#   传了它会全局应用到 Swift Package 目标 ZIPFoundation 上，报
-#   "ZIPFoundation does not support provisioning profiles"（2026-11-21 run 44899977771，exit 65）。
-#   描述文件仍在导出时强制指定（ExportOptions 里 provisioningProfiles 映射到 erosion adhoc）。
+#   含 App Group group.com.qiuyuebai.erosion.WQ，Profile 名叫 erosion adhoc）。
+# 做法：不用 xcodebuild archive（archive 的签名三连败，见下）；
+#   按项目自带的 ipabuild.sh 思路：先无签名编译出 .app，再用 codesign 手动签名、
+#   嵌入 Ad Hoc 描述文件、打包 Payload 成 IPA。
+#   Archive 三连败记录（2026-11-21）：
+#   run 44899326314：Archive 没传 DEVELOPMENT_TEAM / 描述文件名，报 ZIPFoundation 缺 team、
+#     Erosion 缺 App Groups 能力的描述文件，exit 65。
+#   run 44899977771：传了 PROVISIONING_PROFILE_SPECIFIER，全局套到 Swift Package 目标
+#     ZIPFoundation 上，报 "does not support provisioning profiles"，exit 65。
+#   run 44900176166：改 Automatic 签名，但 CODE_SIGN_IDENTITY=Apple Distribution 与自动签名
+#     冲突，报 "conflicting provisioning settings"，exit 65。
 # 导出方式：ad-hoc（不是 app-store-connect），导出的 IPA 可直接装到 Profile 里登记过的设备上，
 #   有效期 1 年；不要用 SideInstaller 再重签，直接用 Xcode / Apple Configurator 装机。
 name: Build Signed IPA (Ad Hoc)
@@ -60,46 +58,31 @@ jobs:
           echo "$PROV_B64" | base64 -d > "$HOME/Library/MobileDevice/Provisioning Profiles/erosion_adhoc.mobileprovision"
           ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/"
 
-      - name: Archive (signed, manual signing)
+      - name: Build unsigned app
         run: |
           xcodebuild -project Erosion.xcodeproj \
             -scheme Erosion \
             -configuration Release \
+            -derivedDataPath build/DerivedDataApp \
             -destination 'generic/platform=iOS' \
-            -archivePath build/Erosion.xcarchive \
-            archive \
-            CODE_SIGN_STYLE=Automatic \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            DEVELOPMENT_TEAM=3Q639W8KX5
+            build \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS="" CODE_SIGNING_ALLOWED=NO
+          cp -r "build/DerivedDataApp/Build/Products/Release-iphoneos/Erosion.app" build/Erosion.app
+          ls -la build/Erosion.app
 
-      - name: Export signed IPA (Ad Hoc)
+      - name: Sign app and package IPA (Ad Hoc)
         run: |
-          cat > /tmp/ExportOptions.plist <<'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>ad-hoc</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>teamID</key>
-            <string>3Q639W8KX5</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>com.qiuyuebai.erosion</key>
-              <string>erosion adhoc</string>
-            </dict>
-            <key>stripSwiftSymbols</key>
-            <true/>
-          </dict>
-          </plist>
-          PLIST
-          xcodebuild -exportArchive \
-            -archivePath build/Erosion.xcarchive \
-            -exportPath build/export \
-            -exportOptionsPlist /tmp/ExportOptions.plist
-          ls -la build/export/
+          codesign --remove build/Erosion.app || true
+          rm -rf build/Erosion.app/_CodeSignature build/Erosion.app/embedded.mobileprovision
+          cp "$HOME/Library/MobileDevice/Provisioning Profiles/erosion_adhoc.mobileprovision" build/Erosion.app/embedded.mobileprovision
+          codesign --force --sign "Apple Distribution" --entitlements Erosion/Erosion.entitlements --generate-entitlement-der --timestamp=none build/Erosion.app
+          codesign --verify --deep --strict --verbose=2 build/Erosion.app
+          codesign -d --entitlements :- build/Erosion.app
+          mkdir -p build/export
+          rm -rf build/Payload && mkdir build/Payload
+          cp -r build/Erosion.app build/Payload/Erosion.app
+          cd build && zip -9r export/Erosion-signed.ipa Payload
+          ls -la export/
 
       - name: Upload signed IPA artifact
         uses: actions/upload-artifact@v4.6.2
