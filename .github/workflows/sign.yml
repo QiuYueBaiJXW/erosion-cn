@@ -7,6 +7,10 @@
 # 做法：不用 xcodebuild archive（archive 的签名三连败，见下）；
 #   按项目自带的 ipabuild.sh 思路：先无签名编译出 .app，再用 codesign 手动签名、
 #   嵌入 Ad Hoc 描述文件、打包 Payload 成 IPA。
+#   签名 bug（2026-11-21 run 44900764008）：第一版 codesign 直接用了项目里的
+#   Erosion.entitlements，里面只有 App Group 一项，签出来的 App 缺 application-identifier、
+#   team-identifier、get-task-allow、keychain-access-groups，OTA 装到一半报无法安装。
+#   修法：从描述文件里取完整 Entitlements 再 codesign。
 #   Archive 三连败记录（2026-11-21）：
 #   run 44899326314：Archive 没传 DEVELOPMENT_TEAM / 描述文件名，报 ZIPFoundation 缺 team、
 #     Erosion 缺 App Groups 能力的描述文件，exit 65。
@@ -75,7 +79,17 @@ jobs:
           codesign --remove build/Erosion.app || true
           rm -rf build/Erosion.app/_CodeSignature build/Erosion.app/embedded.mobileprovision
           cp "$HOME/Library/MobileDevice/Provisioning Profiles/erosion_adhoc.mobileprovision" build/Erosion.app/embedded.mobileprovision
-          codesign --force --sign "Apple Distribution" --entitlements Erosion/Erosion.entitlements --generate-entitlement-der --timestamp=none build/Erosion.app
+          python3 - <<'PYEOF'
+          import plistlib
+          data = open("build/Erosion.app/embedded.mobileprovision", "rb").read()
+          start = data.find(b'<?xml')
+          end = data.rfind(b'</plist>') + len(b'</plist>')
+          pl = plistlib.loads(data[start:end])
+          with open("/tmp/full.entitlements", "wb") as f:
+              plistlib.dump(pl["Entitlements"], f)
+          print("Full entitlements from profile:", pl["Entitlements"])
+          PYEOF
+          codesign --force --sign "Apple Distribution" --entitlements /tmp/full.entitlements --generate-entitlement-der --timestamp=none build/Erosion.app
           codesign --verify --deep --strict --verbose=2 build/Erosion.app
           codesign -d --entitlements :- build/Erosion.app
           mkdir -p build/export
